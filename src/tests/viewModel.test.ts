@@ -43,4 +43,47 @@ describe('EnergyLensViewModel', () => {
     expect(vm.getState().status).toBe('error');
     expect(vm.getState().notice?.text).toContain('保存失败');
   });
+
+  it('evaluates the target live as device parameters change', () => {
+    vm.updateTarget(200);
+    expect(vm.activeTargetEvaluation?.status).toBe('exceeded');
+    vm.updateDevice('device-aircon', { dailyHours: 3 });
+    expect(vm.activeTargetEvaluation?.status).toBe('met');
+    expect(vm.activeTargetEvaluation?.targetKwh).toBe(200);
+  });
+
+  it('keeps an unreasonable target out of the document without disrupting editing', () => {
+    vm.updateTarget(-10);
+    expect(vm.activeScenario?.targetMonthlyKwh).toBe(300);
+    expect(vm.getState().status).not.toBe('error');
+    expect(vm.getState().notice?.kind).toBe('info');
+    vm.updateTarget(0);
+    expect(vm.activeScenario?.targetMonthlyKwh).toBe(300);
+  });
+
+  it('clears the target without affecting the estimate', () => {
+    const before = vm.activeSummary?.total.monthlyKwh;
+    vm.updateTarget(null);
+    expect(vm.activeScenario?.targetMonthlyKwh).toBeNull();
+    expect(vm.activeTargetEvaluation).toBeNull();
+    expect(vm.activeSummary?.total.monthlyKwh).toBe(before);
+  });
+
+  it('carries the target into duplicates but keeps it independently editable', () => {
+    vm.updateTarget(250);
+    vm.duplicateActive();
+    expect(vm.activeScenario?.targetMonthlyKwh).toBe(250);
+    vm.updateTarget(180);
+    const original = vm.getState().document?.scenarios.find((scenario) => scenario.id === exampleScenario.id);
+    expect(original?.targetMonthlyKwh).toBe(250);
+  });
+
+  it('keeps each scenario’s own target when switching', () => {
+    vm.updateTarget(250);
+    vm.duplicateActive();
+    vm.updateTarget(180);
+    vm.selectScenario(exampleScenario.id);
+    expect(vm.activeScenario?.targetMonthlyKwh).toBe(250);
+    expect(vm.activeTargetEvaluation?.targetKwh).toBe(250);
+  });
 });

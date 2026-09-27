@@ -1,3 +1,4 @@
+import { normalizeTarget } from '../domain';
 import type { EnergyDocument } from '../types';
 
 const STORAGE_KEY = 'energy-lens.document.v1';
@@ -8,7 +9,7 @@ export function readDocument(): EnergyDocument | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!isDocument(parsed)) return null;
-    return parsed;
+    return { ...parsed, scenarios: parsed.scenarios.map((scenario) => ({ ...scenario, targetMonthlyKwh: normalizeTarget(scenario.targetMonthlyKwh) })) };
   } catch {
     return null;
   }

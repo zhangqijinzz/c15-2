@@ -10,6 +10,7 @@ export interface EnergyScenario {
   name: string;
   pricePerKwh: number;
   daysPerMonth: number;
+  targetMonthlyKwh?: number | null;
   devices: EnergyDevice[];
   createdAt: string;
 }
@@ -36,4 +37,24 @@ export interface EnergyEstimate {
 export interface ScenarioSummary {
   total: EnergyEstimate;
   devices: Array<EnergyDevice & EnergyEstimate & { share: number }>;
+}
+
+export type TargetStatus = 'met' | 'exceeded';
+
+export interface TargetDeviceEvaluation {
+  id: string;
+  name: string;
+  monthlyKwh: number;
+  excessShareKwh: number;
+  adjustable: boolean;
+  savingPerHourKwh: number;
+}
+
+export interface TargetEvaluation {
+  targetKwh: number;
+  actualKwh: number;
+  status: TargetStatus;
+  deltaKwh: number;
+  ratio: number;
+  devices: TargetDeviceEvaluation[];
 }

@@ -1,6 +1,6 @@
-import { cloneScenario, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
+import { cloneScenario, evaluateTarget, normalizeTarget, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
 import { findScenario, type EnergyRepository } from './repository';
-import type { EnergyDevice, EnergyDocument, EnergyScenario, Notice, ViewStatus } from './types';
+import type { EnergyDevice, EnergyDocument, EnergyScenario, Notice, TargetEvaluation, ViewStatus } from './types';
 
 export interface EnergyLensState {
   document: EnergyDocument | null;
@@ -39,6 +39,13 @@ export class EnergyLensViewModel {
 
   get activeSummary() {
     return this.activeScenario ? summarizeScenario(this.activeScenario) : null;
+  }
+
+  get activeTargetEvaluation(): TargetEvaluation | null {
+    const scenario = this.activeScenario;
+    const summary = this.activeSummary;
+    if (!scenario || !summary) return null;
+    return evaluateTarget(summary, scenario.targetMonthlyKwh);
   }
 
   updateDevice(deviceId: string, patch: Partial<Pick<EnergyDevice, 'name' | 'watts' | 'dailyHours'>>): void {
@@ -81,6 +88,21 @@ export class EnergyLensViewModel {
       return;
     }
     this.commit((current) => ({ ...current, name: next.name.trim() || '未命名方案', pricePerKwh: next.pricePerKwh, daysPerMonth: next.daysPerMonth }), '计费参数已更新');
+  }
+
+  updateTarget(raw: number | null): void {
+    const scenario = this.activeScenario;
+    if (!scenario) return;
+    if (raw === null) {
+      this.commit((current) => ({ ...current, targetMonthlyKwh: null }), '已清除月度用电目标');
+      return;
+    }
+    const target = normalizeTarget(raw);
+    if (target === null) {
+      this.setNotice({ kind: 'info', text: '目标需为大于 0 的数字，本次输入未生效，推演结果不受影响' });
+      return;
+    }
+    this.commit((current) => ({ ...current, targetMonthlyKwh: target }), '月度用电目标已更新');
   }
 
   duplicateActive(): void {

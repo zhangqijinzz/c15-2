@@ -8,6 +8,7 @@ function App() {
   const active = vm.activeScenario;
   const summary = vm.activeSummary;
   if (state.status === 'loading' || !active || !summary) return <main className="loading-screen"><div className="pulse" /><p>正在恢复你的能耗方案…</p></main>;
+  const targetEval = vm.activeTargetEvaluation;
   const maxKwh = Math.max(...summary.devices.map((device) => device.monthlyKwh), 1);
   const baseline = state.document?.scenarios.find((item) => item.id !== active.id);
   const comparisonValue = baseline && baseline.id !== active.id ? baseline.devices.reduce((total, device) => total + (device.watts * device.dailyHours * baseline.daysPerMonth) / 1000, 0) : null;
@@ -39,12 +40,32 @@ function App() {
           <div className="panel-heading"><div><span className="step">02</span><h2>时间与价格</h2><p>调整计费周期，让估算更贴近你的账单</p></div></div>
           <label className="big-field"><span>每月计费天数 <em>天</em></span><input type="number" min="1" max="31" value={active.daysPerMonth} onChange={(event) => vm.updateSettings({ daysPerMonth: Number(event.target.value) })} /></label>
           <label className="big-field"><span>居民电价 <em>元 / kWh</em></span><div className="input-prefix"><b>¥</b><input type="number" min="0" step="0.01" value={active.pricePerKwh} onChange={(event) => vm.updateSettings({ pricePerKwh: Number(event.target.value) })} /></div></label>
+          <label className="big-field"><span>月度用电目标 <em>kWh · 选填</em></span><input type="number" min="0" step="10" placeholder="未设置" value={active.targetMonthlyKwh ?? ''} onChange={(event) => event.target.value === '' ? vm.updateTarget(null) : vm.updateTarget(Number(event.target.value))} /></label>
           <div className="formula"><span>计算方式</span><code>功率(W) × 时长(h) ÷ 1,000 × 天数</code><small>结果为估算值，实际账单可能受阶梯电价影响。</small></div>
         </section>
       </div>
 
       <section className="results-section"><div className="section-title"><div><span className="step">03</span><h2>结果分析</h2><p>你的用电结构，一眼看清</p></div><div className="result-actions"><span className="updated">实时更新 · {state.status === 'completed' ? '已完成' : '编辑中'}</span><button className="primary-button" onClick={() => vm.complete()}>完成本次推演 <span>→</span></button></div></div>
         <div className="metrics"><div className="metric-card featured"><span>月度预计用电</span><strong>{formatNumber(summary.total.monthlyKwh)} <small>kWh</small></strong><em>约 ¥{formatNumber(summary.total.monthlyCost)} / 月</em></div><div className="metric-card"><span>日均用电</span><strong>{formatNumber(summary.total.dailyKwh)} <small>kWh</small></strong><em>平均每天</em></div><div className="metric-card"><span>设备数量</span><strong>{active.devices.length} <small>台</small></strong><em>已纳入估算</em></div></div>
+        {targetEval ? <div className={`target-card ${targetEval.status}`}>
+          <div className="target-head">
+            <span className="target-badge">{targetEval.status === 'met' ? '✓ 达标' : '✕ 超标'}</span>
+            <div className="target-figures">
+              <span>月度目标 <b>{formatNumber(targetEval.targetKwh)} kWh</b></span>
+              <span>当前预计 <b>{formatNumber(targetEval.actualKwh)} kWh</b></span>
+              <span>{targetEval.status === 'met' ? <>剩余额度 <b>{formatNumber(-targetEval.deltaKwh)} kWh</b></> : <>超出目标 <b>{formatNumber(targetEval.deltaKwh)} kWh</b></>}</span>
+            </div>
+          </div>
+          <div className="target-track"><i style={{ width: `${Math.min(targetEval.ratio, 1) * 100}%` }} /></div>
+          {targetEval.status === 'exceeded' && <div className="target-breakdown">
+            <p>超出的 {formatNumber(targetEval.deltaKwh)} kWh 按用电占比分摊到各设备，标注「可调」的还有压缩空间：</p>
+            <ul>{targetEval.devices.filter((device) => device.excessShareKwh > 0).map((device) => <li key={device.id}>
+              <span>{device.name}</span>
+              <b>分摊 {formatNumber(device.excessShareKwh)} kWh</b>
+              <em>{device.adjustable ? `可调 · 每天少用 1 小时约省 ${formatNumber(device.savingPerHourKwh)} kWh，最多可下调 ${formatNumber(device.monthlyKwh)} kWh` : '当前参数下暂无可调空间'}</em>
+            </li>)}</ul>
+          </div>}
+        </div> : <div className="target-card unset"><span className="target-unset">未设置月度用电目标 · 在「02 时间与价格」中填写目标后，这里会实时显示达标状态</span></div>}
         <div className="analysis-grid"><div className="chart-card"><div className="card-heading"><div><h3>设备消耗占比</h3><p>按月度用电量排序</p></div><span className="legend"><i /> 月度 kWh</span></div><div className="bar-chart">{summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh).map((device) => <div className="bar-row" key={device.id}><div className="bar-label"><span>{device.name}</span><b>{formatNumber(device.monthlyKwh)} kWh</b></div><div className="bar-track"><i style={{ width: `${(device.monthlyKwh / maxKwh) * 100}%` }} /><span>{Math.round(device.share * 100)}%</span></div></div>)}</div></div><div className="insight-card"><span className="insight-icon">◒</span><h3>你的最大用电来源</h3><strong>{summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh)[0]?.name}</strong><p>占总用电的 <b>{Math.round((summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh)[0]?.share ?? 0) * 100)}%</b>。每天减少 1 小时使用，预计每月可节省 <b>¥{formatNumber((summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh)[0]?.watts ?? 0) / 1000 * active.pricePerKwh * 30)}</b>。</p></div></div>
       </section>
 
