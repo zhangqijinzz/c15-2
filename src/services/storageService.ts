@@ -42,7 +42,10 @@ function isScenario(value: unknown): value is EnergyDocument['scenarios'][number
     && scenario.daysPerMonth <= 31
     && Array.isArray(scenario.devices)
     && scenario.devices.length > 0
-    && scenario.devices.every(isDevice);
+    && scenario.devices.every(isDevice)
+    && (scenario.monthlyTargetKwh === undefined
+      || scenario.monthlyTargetKwh === null
+      || typeof scenario.monthlyTargetKwh === 'number');
 }
 
 function isDevice(value: unknown): value is EnergyDocument['scenarios'][number]['devices'][number] {

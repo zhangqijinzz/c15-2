@@ -12,6 +12,8 @@ export interface EnergyScenario {
   daysPerMonth: number;
   devices: EnergyDevice[];
   createdAt: string;
+  /** 月度用电目标（kWh），未设置或值不合理时视为无目标 */
+  monthlyTargetKwh?: number | null;
 }
 
 export interface EnergyDocument {
@@ -36,4 +38,27 @@ export interface EnergyEstimate {
 export interface ScenarioSummary {
   total: EnergyEstimate;
   devices: Array<EnergyDevice & EnergyEstimate & { share: number }>;
+}
+
+export interface TargetDeviceShare {
+  id: string;
+  name: string;
+  monthlyKwh: number;
+  /** 该设备分摊到的超出电量（按用电占比拆分） */
+  excessShareKwh: number;
+  /** 是否还有可下调空间（功率和时长均大于 0） */
+  adjustable: boolean;
+  /** 把使用时长降到 0 时最多可省下的月度电量 */
+  maxReducibleKwh: number;
+}
+
+export interface TargetAssessment {
+  targetKwh: number;
+  actualKwh: number;
+  status: 'met' | 'exceeded';
+  /** 实际 − 目标，负数表示尚有富余 */
+  deltaKwh: number;
+  /** 实际 / 目标 */
+  usageRatio: number;
+  devices: TargetDeviceShare[];
 }

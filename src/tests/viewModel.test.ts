@@ -43,4 +43,40 @@ describe('EnergyLensViewModel', () => {
     expect(vm.getState().status).toBe('error');
     expect(vm.getState().notice?.text).toContain('保存失败');
   });
+
+  it('sets, reassesses and clears a monthly target', () => {
+    expect(vm.activeAssessment).toBeNull();
+    vm.updateTarget(200); // 示例方案约 265 kWh/月 → 超标
+    expect(vm.activeScenario?.monthlyTargetKwh).toBe(200);
+    expect(vm.activeAssessment?.status).toBe('exceeded');
+    expect(vm.activeAssessment?.devices.reduce((sum, device) => sum + device.excessShareKwh, 0)).toBeCloseTo(vm.activeAssessment?.deltaKwh ?? 0);
+    vm.updateDevice('device-aircon', { dailyHours: 1 }); // 参数一变立即重新判断 → 达标
+    expect(vm.activeAssessment?.status).toBe('met');
+    vm.updateTarget(null);
+    expect(vm.activeScenario?.monthlyTargetKwh).toBeNull();
+    expect(vm.activeAssessment).toBeNull();
+  });
+
+  it('rejects unreasonable target values without touching the document', () => {
+    vm.updateTarget(200);
+    const savedCalls = (repository.save as ReturnType<typeof vi.fn>).mock.calls.length;
+    vm.updateTarget(-5);
+    expect(vm.getState().status).toBe('error');
+    expect(vm.activeScenario?.monthlyTargetKwh).toBe(200); // 保留原目标
+    expect((repository.save as ReturnType<typeof vi.fn>).mock.calls.length).toBe(savedCalls);
+    expect(vm.activeAssessment?.status).toBe('exceeded'); // 推演照常
+  });
+
+  it('keeps each scenario its own target and copies it on duplicate', () => {
+    vm.updateTarget(200);
+    vm.duplicateActive();
+    const copy = vm.activeScenario;
+    expect(copy?.monthlyTargetKwh).toBe(200); // 副本带走目标
+    vm.updateTarget(500); // 副本上单独改
+    const original = vm.getState().document?.scenarios.find((scenario) => scenario.id === exampleScenario.id);
+    expect(original?.monthlyTargetKwh).toBe(200); // 原方案不受影响
+    vm.selectScenario(exampleScenario.id);
+    expect(vm.activeScenario?.monthlyTargetKwh).toBe(200); // 切换回来各自带着自己的目标
+    expect(vm.activeAssessment?.targetKwh).toBe(200);
+  });
 });

@@ -1,5 +1,6 @@
 import { DeviceEditor } from './components/DeviceEditor';
 import { ScenarioCard } from './components/ScenarioCard';
+import { TargetPanel } from './components/TargetPanel';
 import { formatNumber } from './domain';
 import { useEnergyLens } from './hooks';
 
@@ -8,6 +9,7 @@ function App() {
   const active = vm.activeScenario;
   const summary = vm.activeSummary;
   if (state.status === 'loading' || !active || !summary) return <main className="loading-screen"><div className="pulse" /><p>正在恢复你的能耗方案…</p></main>;
+  const assessment = vm.activeAssessment;
   const maxKwh = Math.max(...summary.devices.map((device) => device.monthlyKwh), 1);
   const baseline = state.document?.scenarios.find((item) => item.id !== active.id);
   const comparisonValue = baseline && baseline.id !== active.id ? baseline.devices.reduce((total, device) => total + (device.watts * device.dailyHours * baseline.daysPerMonth) / 1000, 0) : null;
@@ -39,12 +41,14 @@ function App() {
           <div className="panel-heading"><div><span className="step">02</span><h2>时间与价格</h2><p>调整计费周期，让估算更贴近你的账单</p></div></div>
           <label className="big-field"><span>每月计费天数 <em>天</em></span><input type="number" min="1" max="31" value={active.daysPerMonth} onChange={(event) => vm.updateSettings({ daysPerMonth: Number(event.target.value) })} /></label>
           <label className="big-field"><span>居民电价 <em>元 / kWh</em></span><div className="input-prefix"><b>¥</b><input type="number" min="0" step="0.01" value={active.pricePerKwh} onChange={(event) => vm.updateSettings({ pricePerKwh: Number(event.target.value) })} /></div></label>
+          <label className="big-field"><span>月度用电目标 <em>kWh · 可选，留空不设置</em></span><input type="number" min="0" step="1" placeholder="例如 200" value={active.monthlyTargetKwh ?? ''} onChange={(event) => vm.updateTarget(event.target.value === '' ? null : Number(event.target.value))} /></label>
           <div className="formula"><span>计算方式</span><code>功率(W) × 时长(h) ÷ 1,000 × 天数</code><small>结果为估算值，实际账单可能受阶梯电价影响。</small></div>
         </section>
       </div>
 
       <section className="results-section"><div className="section-title"><div><span className="step">03</span><h2>结果分析</h2><p>你的用电结构，一眼看清</p></div><div className="result-actions"><span className="updated">实时更新 · {state.status === 'completed' ? '已完成' : '编辑中'}</span><button className="primary-button" onClick={() => vm.complete()}>完成本次推演 <span>→</span></button></div></div>
         <div className="metrics"><div className="metric-card featured"><span>月度预计用电</span><strong>{formatNumber(summary.total.monthlyKwh)} <small>kWh</small></strong><em>约 ¥{formatNumber(summary.total.monthlyCost)} / 月</em></div><div className="metric-card"><span>日均用电</span><strong>{formatNumber(summary.total.dailyKwh)} <small>kWh</small></strong><em>平均每天</em></div><div className="metric-card"><span>设备数量</span><strong>{active.devices.length} <small>台</small></strong><em>已纳入估算</em></div></div>
+        <TargetPanel assessment={assessment} pricePerKwh={active.pricePerKwh} />
         <div className="analysis-grid"><div className="chart-card"><div className="card-heading"><div><h3>设备消耗占比</h3><p>按月度用电量排序</p></div><span className="legend"><i /> 月度 kWh</span></div><div className="bar-chart">{summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh).map((device) => <div className="bar-row" key={device.id}><div className="bar-label"><span>{device.name}</span><b>{formatNumber(device.monthlyKwh)} kWh</b></div><div className="bar-track"><i style={{ width: `${(device.monthlyKwh / maxKwh) * 100}%` }} /><span>{Math.round(device.share * 100)}%</span></div></div>)}</div></div><div className="insight-card"><span className="insight-icon">◒</span><h3>你的最大用电来源</h3><strong>{summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh)[0]?.name}</strong><p>占总用电的 <b>{Math.round((summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh)[0]?.share ?? 0) * 100)}%</b>。每天减少 1 小时使用，预计每月可节省 <b>¥{formatNumber((summary.devices.slice().sort((a, b) => b.monthlyKwh - a.monthlyKwh)[0]?.watts ?? 0) / 1000 * active.pricePerKwh * 30)}</b>。</p></div></div>
       </section>
 

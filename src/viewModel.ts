@@ -1,4 +1,4 @@
-import { cloneScenario, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
+import { assessTarget, cloneScenario, sanitizeTargetKwh, summarizeScenario, validateDevice, validateScenarioSettings } from './domain';
 import { findScenario, type EnergyRepository } from './repository';
 import type { EnergyDevice, EnergyDocument, EnergyScenario, Notice, ViewStatus } from './types';
 
@@ -39,6 +39,27 @@ export class EnergyLensViewModel {
 
   get activeSummary() {
     return this.activeScenario ? summarizeScenario(this.activeScenario) : null;
+  }
+
+  get activeAssessment() {
+    const scenario = this.activeScenario;
+    const summary = this.activeSummary;
+    return scenario && summary ? assessTarget(summary, scenario.monthlyTargetKwh) : null;
+  }
+
+  updateTarget(raw: number | null): void {
+    const scenario = this.activeScenario;
+    if (!scenario) return;
+    if (raw === null) {
+      this.commit((current) => ({ ...current, monthlyTargetKwh: null }), '已清除月度用电目标');
+      return;
+    }
+    const target = sanitizeTargetKwh(raw);
+    if (target === null) {
+      this.setNotice({ kind: 'error', text: '月度目标需为大于 0 的数字，留空可清除目标' });
+      return;
+    }
+    this.commit((current) => ({ ...current, monthlyTargetKwh: target }), '月度用电目标已更新');
   }
 
   updateDevice(deviceId: string, patch: Partial<Pick<EnergyDevice, 'name' | 'watts' | 'dailyHours'>>): void {

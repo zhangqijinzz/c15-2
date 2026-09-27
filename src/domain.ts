@@ -1,4 +1,4 @@
-import type { EnergyDevice, EnergyEstimate, EnergyScenario, ScenarioSummary } from './types';
+import type { EnergyDevice, EnergyEstimate, EnergyScenario, ScenarioSummary, TargetAssessment } from './types';
 
 export const MAX_DAILY_HOURS = 24;
 
@@ -53,6 +53,34 @@ export function validateScenarioSettings(pricePerKwh: number, daysPerMonth: numb
   if (!Number.isFinite(pricePerKwh) || pricePerKwh < 0) return '电价不能为负数';
   if (!Number.isFinite(daysPerMonth) || daysPerMonth < 1 || daysPerMonth > 31) return '计费天数需在 1–31 天之间';
   return null;
+}
+
+/** 只接受大于 0 的有限数字作为目标；空值、负数、0、非数字一律视为“未设置目标” */
+export function sanitizeTargetKwh(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** 对照月度目标评估当前方案；目标缺失或不合理时返回 null，不影响原有推演 */
+export function assessTarget(summary: ScenarioSummary, targetKwh: number | null | undefined): TargetAssessment | null {
+  const target = sanitizeTargetKwh(targetKwh);
+  if (target === null) return null;
+  const actualKwh = summary.total.monthlyKwh;
+  const excessKwh = Math.max(actualKwh - target, 0);
+  return {
+    targetKwh: target,
+    actualKwh,
+    status: actualKwh <= target ? 'met' : 'exceeded',
+    deltaKwh: actualKwh - target,
+    usageRatio: actualKwh / target,
+    devices: summary.devices.map((device) => ({
+      id: device.id,
+      name: device.name,
+      monthlyKwh: device.monthlyKwh,
+      excessShareKwh: excessKwh * device.share,
+      adjustable: device.watts > 0 && device.dailyHours > 0,
+      maxReducibleKwh: device.monthlyKwh,
+    })),
+  };
 }
 
 export function formatNumber(value: number, digits = 2): string {
